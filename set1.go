@@ -1,6 +1,7 @@
 package cryptopals
 
 import (
+	"bufio"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -71,15 +72,16 @@ func scoreText(text string, corpus map[rune]float64) float64 {
 	return score / float64(utf8.RuneCountInString(text))
 }
 
-func SingleByteXOR(s string) (string, error) {
-	corpus := corpusFromFiles("alice.txt")
+var corpus = corpusFromFiles("data/alice.txt")
+
+func SingleByteXOR(s string) (string, float64, error) {
 	for char, value := range corpus {
 		log.Printf("%c: %.5f", char, value)
 	}
 
 	hex, err := hex.DecodeString(s)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 
 	var res []byte
@@ -98,5 +100,46 @@ func SingleByteXOR(s string) (string, error) {
 			res = decryption
 		}
 	}
-	return string(res), nil
+	return string(res), lastScore, nil
+}
+
+func readLines(file string) ([]string, error) {
+	f, err := os.Open(file)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	var lines []string
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return lines, nil
+}
+
+func DetectSingleByteXOR(file string) (string, error) {
+	lines, err := readLines(file)
+	if err != nil {
+		return "", err
+	}
+
+	var lastScore float64
+	var res string
+	for _, line := range lines {
+		decryption, score, err := SingleByteXOR(line)
+		if err != nil {
+			return "", err
+		}
+		log.Printf("%s", decryption)
+		if score > lastScore {
+			lastScore = score
+			res = decryption
+		}
+	}
+	return res, nil
 }
