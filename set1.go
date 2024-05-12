@@ -143,3 +143,13 @@ func DetectSingleByteXOR(file string) (string, error) {
 	}
 	return res, nil
 }
+
+func RepeatingKeyXOR(stext, skey string) (string, error) {
+	text := []byte(stext)
+	key := []byte(skey)
+	res := make([]byte, len(text))
+	for i := range text {
+		res[i] = text[i] ^ key[i%len(key)]
+	}
+	return hex.EncodeToString(res), nil
+}
