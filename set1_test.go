@@ -1,6 +1,7 @@
 package cryptopals
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -28,7 +29,7 @@ func TestFixedXOR(t *testing.T) {
 
 func TestSingleByteXOR(t *testing.T) {
 	expected := "Cooking MC's like a pound of bacon"
-	res, _, err := SingleByteXOR("1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736")
+	res, _, _, err := SingleByteXOR("1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736")
 	if err != nil {
 		t.Errorf("Error: %s", err)
 	}
@@ -67,5 +68,16 @@ func TestHammingDistance(t *testing.T) {
 	}
 	if res != expected {
 		t.Errorf("Expected %d, got %d", expected, res)
+	}
+}
+
+func TestBreakRepeatingKeyXOR(t *testing.T) {
+	expected := "I'm back and I'm ringin' the bell \nA rockin' on the mike while"
+	res, err := BreakRepeatingKeyXOR("data/6.txt")
+	if err != nil {
+		t.Errorf("Error: %s", err)
+	}
+	if !strings.HasPrefix(res, expected) {
+		t.Errorf("Expected %s, got %s", expected, res)
 	}
 }

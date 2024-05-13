@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"log"
+	"math"
 	"math/bits"
 	"os"
 	"unicode/utf8"
@@ -75,18 +76,19 @@ func scoreText(text string, corpus map[rune]float64) float64 {
 
 var corpus = corpusFromFiles("data/alice.txt")
 
-func SingleByteXOR(s string) (string, float64, error) {
-	for char, value := range corpus {
-		log.Printf("%c: %.5f", char, value)
-	}
+func SingleByteXOR(s string) (string, int, float64, error) {
+	// for char, value := range corpus {
+	// 	log.Printf("%c: %.5f", char, value)
+	// }
 
 	hex, err := hex.DecodeString(s)
 	if err != nil {
-		return "", 0, err
+		log.Fatalf("Error: %s", err)
 	}
 
 	var res []byte
-	var lastScore float64
+	var bestKey int
+	var bestScore float64
 	for key := 0; key < 256; key++ {
 
 		decryption := make([]byte, len(hex))
@@ -95,13 +97,14 @@ func SingleByteXOR(s string) (string, float64, error) {
 		}
 
 		score := scoreText(string(decryption), corpus)
-		log.Printf("%s: %.5f", string(decryption), score)
-		if score > lastScore {
-			lastScore = score
+		// log.Printf("%s: %.5f", string(decryption), score)
+		if score > bestScore {
+			bestKey = key
+			bestScore = score
 			res = decryption
 		}
 	}
-	return string(res), lastScore, nil
+	return string(res), bestKey, bestScore, nil
 }
 
 func readLines(file string) ([]string, error) {
@@ -129,16 +132,16 @@ func DetectSingleByteXOR(file string) (string, error) {
 		return "", err
 	}
 
-	var lastScore float64
+	var bestScore float64
 	var res string
 	for _, line := range lines {
-		decryption, score, err := SingleByteXOR(line)
+		decryption, _, score, err := SingleByteXOR(line)
 		if err != nil {
 			return "", err
 		}
-		log.Printf("%s", decryption)
-		if score > lastScore {
-			lastScore = score
+		// log.Printf("%s", decryption)
+		if score > bestScore {
+			bestScore = score
 			res = decryption
 		}
 	}
@@ -167,4 +170,66 @@ func HammingDistance(s1, s2 string) (int, error) {
 		distance += bits.OnesCount8(xor)
 	}
 	return distance, nil
+}
+
+func FindRepeatedKeySize(cipher []byte) int {
+	var result int
+	var bestScore float64 = math.MaxFloat64
+	for keySize := 2; keySize <= 40; keySize++ {
+		s1 := cipher[:keySize*8]
+		s2 := cipher[keySize*8 : keySize*8*2]
+
+		distance, err := HammingDistance(string(s1), string(s2))
+		if err != nil {
+			log.Fatalf("Error: %s", err)
+		}
+
+		score := float64(distance) / float64(keySize)
+		// log.Printf("Key size: %d, Score: %.5f", keySize, score)
+		if score < bestScore {
+			bestScore = score
+			result = keySize
+		}
+	}
+	return result
+}
+
+func BreakRepeatingKeyXOR(file string) (string, error) {
+	b64text, err := os.ReadFile(file)
+	if err != nil {
+		return "", err
+	}
+	text, err := base64.StdEncoding.DecodeString(string(b64text))
+	if err != nil {
+		return "", err
+	}
+	keySize := FindRepeatedKeySize(text)
+	log.Printf("Key size is likely: %d", keySize)
+
+	column := make([]byte, (len(text)+keySize-1)/keySize)
+	key := make([]byte, keySize)
+	for col := 0; col < keySize; col++ {
+		for row := range column {
+			if row*keySize+col >= len(text) {
+				continue
+			}
+			column[row] = text[row*keySize+col]
+		}
+		_, k, _, err := SingleByteXOR(hex.EncodeToString(column))
+		if err != nil {
+			log.Fatalf("Error: %s", err)
+		}
+		key[col] = byte(k)
+	}
+	log.Printf("Key is likely: %s", string(key))
+
+	hres, err := RepeatingKeyXOR(string(text), string(key))
+	if err != nil {
+		return "", err
+	}
+	res, err := hex.DecodeString(hres)
+	if err != nil {
+		return "", err
+	}
+	return string(res), nil
 }
