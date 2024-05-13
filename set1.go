@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"log"
+	"math/bits"
 	"os"
 	"unicode/utf8"
 )
@@ -152,4 +153,18 @@ func RepeatingKeyXOR(stext, skey string) (string, error) {
 		res[i] = text[i] ^ key[i%len(key)]
 	}
 	return hex.EncodeToString(res), nil
+}
+
+func HammingDistance(s1, s2 string) (int, error) {
+	b1 := []byte(s1)
+	b2 := []byte(s2)
+	if len(b1) != len(b2) {
+		return 0, errors.New("invalid length")
+	}
+	distance := 0
+	for i := range b1 {
+		xor := b1[i] ^ b2[i]
+		distance += bits.OnesCount8(xor)
+	}
+	return distance, nil
 }
