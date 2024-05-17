@@ -1,6 +1,7 @@
 package cryptopals
 
 import (
+	"crypto/cipher"
 	"encoding/base64"
 	"encoding/hex"
 	"log"
@@ -67,4 +68,18 @@ func BreakRepeatingKeyXOR(file string) (string, error) {
 		return "", err
 	}
 	return string(res), nil
+}
+
+func DecryptECB(in []byte, b cipher.Block) []byte {
+
+	if len(in)%b.BlockSize() != 0 {
+		log.Fatalf("Input not a multiple of block size")
+	}
+
+	out := make([]byte, len(in))
+	for i := 0; i < len(in); i += b.BlockSize() {
+		b.Decrypt(out[i:], in[i:])
+	}
+
+	return out
 }
