@@ -71,15 +71,24 @@ func BreakRepeatingKeyXOR(file string) (string, error) {
 }
 
 func DecryptECB(in []byte, b cipher.Block) []byte {
-
 	if len(in)%b.BlockSize() != 0 {
 		log.Fatalf("Input not a multiple of block size")
 	}
-
 	out := make([]byte, len(in))
 	for i := 0; i < len(in); i += b.BlockSize() {
 		b.Decrypt(out[i:], in[i:])
 	}
-
 	return out
+}
+
+func DetectECB(in []byte, b cipher.Block) bool {
+	seen := make(map[string]struct{})
+	for i := 0; i < len(in); i += b.BlockSize() {
+		val := string(in[i : i+b.BlockSize()])
+		if _, ok := seen[val]; ok {
+			return true
+		}
+		seen[val] = struct{}{}
+	}
+	return false
 }

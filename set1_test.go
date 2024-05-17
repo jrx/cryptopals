@@ -3,6 +3,7 @@ package cryptopals
 import (
 	"crypto/aes"
 	"encoding/base64"
+	"encoding/hex"
 	"os"
 	"strings"
 	"testing"
@@ -52,5 +53,25 @@ func TestDecryptECB(t *testing.T) {
 	}
 	if !strings.HasPrefix(string(res), expected) {
 		t.Errorf("Expected %s, got %s", expected, res)
+	}
+}
+
+func TestDetectECB(t *testing.T) {
+	lines, err := ReadLines("testdata/8.txt")
+	if err != nil {
+		t.Errorf("Error: %s", err)
+	}
+	cipher, err := aes.NewCipher([]byte("YELLOW SUBMARINE"))
+	if err != nil {
+		t.Errorf("Error: %s", err)
+	}
+	for i, line := range lines {
+		res, err := hex.DecodeString(line)
+		if err != nil {
+			t.Errorf("Error: %s", err)
+		}
+		if DetectECB(res, cipher) {
+			t.Logf("Ciphertext %d is encrypted with ECB", i+1)
+		}
 	}
 }
