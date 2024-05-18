@@ -22,6 +22,17 @@ func HexToBase64(hs string) (string, error) {
 	return base64.StdEncoding.EncodeToString(value), nil
 }
 
+func XOR(h1, h2 []byte) []byte {
+	if len(h1) != len(h2) {
+		log.Fatal("invalid length")
+	}
+	res := make([]byte, len(h1))
+	for i := range h1 {
+		res[i] = h1[i] ^ h2[i]
+	}
+	return res
+}
+
 func FixedXOR(s1, s2 string) (string, error) {
 	h1, err := hex.DecodeString(s1)
 	if err != nil {
@@ -34,15 +45,7 @@ func FixedXOR(s1, s2 string) (string, error) {
 		return "", err
 	}
 	log.Printf("%s", string(h2))
-
-	if len(h1) != len(h2) {
-		return "", errors.New("invalid length")
-	}
-
-	res := make([]byte, len(h1))
-	for i := range h1 {
-		res[i] = h1[i] ^ h2[i]
-	}
+	res := XOR(h1, h2)
 	log.Printf("%s", string(res))
 	return hex.EncodeToString(res), nil
 }
