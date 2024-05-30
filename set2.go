@@ -2,8 +2,11 @@ package cryptopals
 
 import (
 	"bytes"
+	"crypto/aes"
 	"crypto/cipher"
+	"crypto/rand"
 	"log"
+	"math/big"
 )
 
 // PadPKCS7 pads a byte slice with PKCS#7 padding.
@@ -61,4 +64,46 @@ func DecryptCBC(b cipher.Block, iv, in []byte) []byte {
 	}
 
 	return out
+}
+
+// EncryptECB encrypts a byte slice using AES in ECB mode.
+func EncryptECB(b cipher.Block, in []byte) []byte {
+	size := b.BlockSize()
+	if len(in)%size != 0 {
+		log.Fatal("input length must be a multiple of the block size")
+	}
+	out := make([]byte, len(in))
+	for i := 0; i < len(in); i += size {
+		b.Encrypt(out[i:], in[i:])
+	}
+	return out
+}
+
+func NewECBCBCOracle() func([]byte) []byte {
+	key := make([]byte, 16)
+	rand.Read(key)
+	cipher, _ := aes.NewCipher(key)
+
+	return func(in []byte) []byte {
+
+		prefixRNG, _ := rand.Int(rand.Reader, big.NewInt(5))
+		prefix := make([]byte, 5+prefixRNG.Int64())
+		rand.Read(prefix)
+
+		suffixRNG, _ := rand.Int(rand.Reader, big.NewInt(5))
+		suffix := make([]byte, 5+suffixRNG.Int64())
+		rand.Read(suffix)
+
+		in = append(append(prefix, in...), suffix...)
+		in = PadPKCS7(in, len(in)+16-len(in)%16)
+
+		r, _ := rand.Int(rand.Reader, big.NewInt(2))
+		if r.Int64() == 0 {
+			iv := make([]byte, 16)
+			rand.Read(iv)
+			return EncryptCBC(cipher, iv, in)
+		} else {
+			return EncryptECB(cipher, in)
+		}
+	}
 }

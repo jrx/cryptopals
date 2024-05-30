@@ -50,3 +50,36 @@ func TestEncryptCBC(t *testing.T) {
 	}
 	t.Logf("%s", DecryptCBC(cipher, iv, text))
 }
+
+func TestEncryptECB(t *testing.T) {
+	key := []byte("YELLOW SUBMARINE")
+	text := []byte("YELLOW SUBMARINEYELLOW SUBMARINE")
+	cipher, err := aes.NewCipher(key)
+	if err != nil {
+		t.Errorf("Error: %s", err)
+	}
+
+	got := DecryptECB(EncryptECB(cipher, text), cipher)
+	if !bytes.Equal(got, text) {
+		t.Errorf("EncryptECB(DecryptECB(%q)) = %q, want %q", text, got, text)
+	}
+}
+
+func TestNewECBCBCOracle(t *testing.T) {
+	oracle := NewECBCBCOracle()
+	key := []byte("YELLOW SUBMARINE")
+	text := []byte("YELLOW SUBMARINEYELLOW SUBMARINEYELLOW SUBMARINEYELLOW SUBMARINE")
+	cipher, err := aes.NewCipher(key)
+	if err != nil {
+		t.Errorf("Error: %s", err)
+	}
+	cbc, ecb := 0, 0
+	for i := 0; i < 500; i++ {
+		if DetectECB(oracle(text), cipher) {
+			ecb++
+		} else {
+			cbc++
+		}
+	}
+	t.Logf("ECB: %d, CBC: %d", ecb, cbc)
+}
