@@ -5,6 +5,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"fmt"
 	"log"
 	"math/big"
 )
@@ -106,4 +107,77 @@ func NewECBCBCOracle() func([]byte) []byte {
 			return EncryptECB(cipher, in)
 		}
 	}
+}
+
+func NewECBSuffixOracle(secret []byte) func([]byte) []byte {
+	key := make([]byte, 16)
+	rand.Read(key)
+	cipher, _ := aes.NewCipher(key)
+
+	return func(in []byte) []byte {
+		// time.Sleep(200 * time.Microsecond)
+		in = append(in, secret...)
+		in = PadPKCS7(in, len(in)+16-len(in)%16)
+		return EncryptECB(cipher, in)
+	}
+}
+
+func RecoverECBSuffix(oracle func([]byte) []byte) []byte {
+	bs := 0
+	for blockSize := 16; blockSize <= 512; blockSize += 16 {
+		msg := bytes.Repeat([]byte{42}, blockSize*2)
+		msg = append(msg, 3)
+		cipher, err := aes.NewCipher(make([]byte, blockSize))
+		if err != nil {
+			log.Fatal(err)
+		}
+		if DetectECB(oracle(msg)[:blockSize*2], cipher) {
+			bs = blockSize
+			break
+		}
+	}
+	if bs == 0 {
+		log.Fatal("could not determine block size")
+	}
+	log.Printf("Block size is likely: %d", bs)
+
+	buildDict := func(known []byte) map[string]byte {
+		dict := make(map[string]byte)
+
+		msg := bytes.Repeat([]byte{42}, bs)
+		msg = append(msg, known...)
+		msg = append(msg, '?')
+		msg = msg[len(msg)-bs:]
+
+		for b := 0; b < 256; b++ {
+			msg[bs-1] = byte(b)
+			res := string(oracle(msg)[:bs])
+			dict[res] = byte(b)
+		}
+		return dict
+	}
+	dict := buildDict(nil)
+	msg := bytes.Repeat([]byte{42}, bs-1)
+	res := string(oracle(msg)[:bs])
+	firstByte := dict[res]
+
+	log.Printf("First byte is likely: %c / %v", firstByte, firstByte)
+
+	var plaintext []byte
+	for i := 0; i < len(oracle([]byte{})); i++ {
+		dict := buildDict(plaintext)
+		msg := bytes.Repeat([]byte{42}, Mod(bs-i-1, bs))
+		skip := i / bs * bs
+		res := string(oracle(msg)[skip : skip+bs])
+		plaintext = append(plaintext, dict[res])
+
+		fmt.Printf("%c", dict[res])
+
+	}
+	fmt.Println()
+	return nil
+}
+
+func Mod(a, b int) int {
+	return (a%b + b) % b
 }

@@ -83,3 +83,15 @@ func TestNewECBCBCOracle(t *testing.T) {
 	}
 	t.Logf("ECB: %d, CBC: %d", ecb, cbc)
 }
+
+func TestRecoverECBSuffix(t *testing.T) {
+	secret := "Um9sbGluJyBpbiBteSA1LjAKV2l0aCBteSByYWctdG9wIGRvd24gc28gbXkgaGFpciBjYW4gYmxvdwpUaGUgZ2lybGllcyBvbiBzdGFuZGJ5IHdhdmluZyBqdXN0IHRvIHNheSBoaQpEaWQgeW91IHN0b3A/IE5vLCBJIGp1c3QgZHJvdmUgYnkK"
+
+	text, err := base64.StdEncoding.DecodeString(secret)
+	if err != nil {
+		t.Errorf("Error: %s", err)
+	}
+
+	oracle := NewECBSuffixOracle(text)
+	RecoverECBSuffix(oracle)
+}
