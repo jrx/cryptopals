@@ -95,3 +95,18 @@ func TestRecoverECBSuffix(t *testing.T) {
 	oracle := NewECBSuffixOracle(text)
 	RecoverECBSuffix(oracle)
 }
+
+func TestNewCutAndPasteECBOracles(t *testing.T) {
+	t.Log(ProfileFor("foo@bar.com"))
+	t.Log(ProfileFor("foo@bar.com&role=admin"))
+
+	generateCookie, amIAdmin := NewCutAndPasteECBOracles()
+
+	if amIAdmin(generateCookie("example@example.com")) {
+		t.Fatal("this is too easy")
+	}
+
+	if !amIAdmin(MakeAdminCookie(generateCookie)) {
+		t.Error("not admin")
+	}
+}

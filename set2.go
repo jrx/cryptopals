@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"net/url"
+	"strings"
 )
 
 // PadPKCS7 pads a byte slice with PKCS#7 padding.
@@ -180,4 +182,74 @@ func RecoverECBSuffix(oracle func([]byte) []byte) []byte {
 
 func Mod(a, b int) int {
 	return (a%b + b) % b
+}
+
+func ProfileFor(email string) string {
+
+	uidRNG, _ := rand.Int(rand.Reader, big.NewInt(90))
+
+	v := url.Values{}
+	v.Set("email", email)
+	v.Set("uid", fmt.Sprintf("%d", 10+uidRNG.Int64()))
+	v.Set("role", "user")
+	return v.Encode()
+}
+
+func UnpadPKCS7(in []byte) []byte {
+	if len(in) == 0 {
+		return in
+	}
+	b := in[len(in)-1]
+	for i := 0; i < int(b); i++ {
+		if in[len(in)-1-i] != b {
+			return nil
+		}
+	}
+	return in[:len(in)-int(b)]
+}
+
+func NewCutAndPasteECBOracles() (
+	generateCookie func(email string) string,
+	amIAdmin func(string) bool,
+) {
+	key := make([]byte, 16)
+	rand.Read(key)
+	cipher, _ := aes.NewCipher(key)
+
+	generateCookie = func(email string) string {
+		profile := []byte(ProfileFor(email))
+		profile = PadPKCS7(profile, len(profile)+16-len(profile)%16)
+		cookie := EncryptECB(cipher, profile)
+		return string(cookie)
+	}
+
+	amIAdmin = func(cookie string) bool {
+		profile := UnpadPKCS7(DecryptECB([]byte(cookie), cipher))
+		v, err := url.ParseQuery(string(profile))
+		if err != nil {
+			return false
+		}
+		log.Print(string(profile))
+		return v.Get("role") == "admin"
+	}
+	return
+}
+
+func MakeAdminCookie(generateCookie func(email string) string) string {
+	// These could be obtained with RecoverECBSuffix
+	start, _ := "email=", "&role=user&uid=51"
+
+	genBlock := func(prefix string) string {
+		msg := strings.Repeat("A", 16-len(start)) + prefix
+		return generateCookie(msg)[16:32]
+	}
+
+	block1 := generateCookie("FOO@BAR.AA")[:16] // email=AAAAAAAAAA
+	block2 := genBlock("AAAAAAAAAA")            // AAAAAAAAAA&role=
+	block3 := genBlock("admin")                 // admin&role=user&
+	msg := strings.Repeat("A", 16-1-len(start)) //
+	block4 := generateCookie(msg)[16:48]        // role=user&uid=51 + padding
+
+	// email=AAAAAAAAAAAAAAAAAAAA&role=admin&role=user&role=user&uid=51 + padding
+	return block1 + block2 + block3 + block4
 }
