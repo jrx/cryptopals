@@ -8,24 +8,23 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	mathrand "math/rand"
 	"net/url"
 	"strings"
-	"time"
 )
 
 // PadPKCS7 pads a byte slice with PKCS#7 padding.
 func PadPKCS7(in []byte, size int) []byte {
-	if size == len(in) {
-		return in
-	}
-	if size < len(in) {
-		log.Fatal("size must be greater than input length")
-	}
 	if size >= 256 {
-		log.Fatal("size must be less than 256")
+		panic("can't pad to size higher than 255")
 	}
 	padLen := size - len(in)%size
-	return append(in, bytes.Repeat([]byte{byte(padLen)}, padLen)...)
+	res := make([]byte, len(in)+padLen)
+	copy(res, in)
+	for i := len(in); i < len(res); i++ {
+		res[i] = byte(padLen)
+	}
+	return res
 }
 
 // EncryptCBC encrypts a byte slice using AES in CBC mode.
@@ -201,7 +200,10 @@ func UnpadPKCS7(in []byte) []byte {
 		return in
 	}
 	b := in[len(in)-1]
-	for i := 0; i < int(b); i++ {
+	if len(in) < int(b) {
+		return nil
+	}
+	for i := 1; i < int(b); i++ {
 		if in[len(in)-1-i] != b {
 			return nil
 		}
@@ -258,22 +260,13 @@ func MakeAdminCookie(generateCookie func(email string) string) string {
 func NewECBSuffixOracleWithPrefix(secret []byte) func([]byte) []byte {
 	key := make([]byte, 16)
 	rand.Read(key)
-	cipher, _ := aes.NewCipher(key)
-
-	prefixRNG, _ := rand.Int(rand.Reader, big.NewInt(81))
-	prefix := make([]byte, prefixRNG.Int64())
-
+	b, _ := aes.NewCipher(key)
+	prefix := make([]byte, mathrand.Intn(100))
 	return func(in []byte) []byte {
-		time.Sleep(200 * time.Microsecond)
+		// time.Sleep(200 * time.Microsecond)
 		rand.Read(prefix)
-		fmt.Println(prefix)
-		fmt.Println(in)
-		fmt.Println(secret)
-		in = append(prefix, in...)
-		in = append(in, secret...)
-		fmt.Println(len(in) + 16 - len(in)%16)
-		in = PadPKCS7(in, len(in)+16-len(in)%16)
-		return EncryptECB(cipher, in)
+		msg := append(prefix, append(in, secret...)...)
+		return EncryptECB(b, PadPKCS7(msg, 16))
 	}
 }
 
@@ -294,33 +287,30 @@ func ECBIndex(in []byte, bs int) int {
 
 func RecoverECBSuffixWithPrefix(oracle func([]byte) []byte) []byte {
 	var bs, pl int
-	out := oracle(bytes.Repeat([]byte{42}, 32))
-	for blockSize := 16; blockSize < 512; blockSize += 16 {
+	out := oracle(bytes.Repeat([]byte{42}, 500))
+	for blockSize := 2; blockSize < 100; blockSize++ {
 		if len(out)%blockSize != 0 {
 			continue
 		}
 		i := ECBIndex(out, blockSize)
-		fmt.Println("i: ", i)
 		if i < 0 {
 			continue
 		}
 		bs = blockSize
-		fmt.Println("bs: ", bs)
-		for p := 0; p < blockSize; p++ {
+		fmt.Println("bs:", bs)
+		for p := 0; p < bs; p++ {
 			msg := append(bytes.Repeat([]byte{42}, p+bs*2), 'X')
 			if ECBIndex(oracle(msg), bs) == i {
 				pl = i - p
-				fmt.Println("pl: ", pl)
+				fmt.Println("pl:", pl)
 				break
 			}
 		}
 		break
 	}
 	if bs == 0 || pl == 0 {
-		log.Fatal("could not determine block or prefix size")
+		panic("didn't detect block or prefix size")
 	}
-	log.Printf("Block size is likely: %d", bs)
-	log.Printf("Prefix length is likely: %d", pl)
 
 	return RecoverECBSuffix(func(in []byte) []byte {
 		p := bs - pl%bs

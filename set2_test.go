@@ -15,7 +15,7 @@ func TestPadPKCS7(t *testing.T) {
 		want []byte
 	}{
 		{[]byte("YELLOW SUBMARINE"), 20, []byte("YELLOW SUBMARINE\x04\x04\x04\x04")},
-		{[]byte("YELLOW SUBMARINE"), 16, []byte("YELLOW SUBMARINE")},
+		{[]byte("YELLOW SUBMARINE"), 16, []byte("YELLOW SUBMARINE\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10")},
 	}
 
 	for _, test := range tests {
@@ -114,12 +114,37 @@ func TestNewCutAndPasteECBOracles(t *testing.T) {
 func TestRecoverECBSuffixWithPrefix(t *testing.T) {
 	secret := "Um9sbGluJyBpbiBteSA1LjAKV2l0aCBteSByYWctdG9wIGRvd24gc28gbXkgaGFpciBjYW4gYmxvdwpUaGUgZ2lybGllcyBvbiBzdGFuZGJ5IHdhdmluZyBqdXN0IHRvIHNheSBoaQpEaWQgeW91IHN0b3A/IE5vLCBJIGp1c3QgZHJvdmUgYnkK"
 
-	_, err := base64.StdEncoding.DecodeString(secret)
+	text, err := base64.StdEncoding.DecodeString(secret)
 	if err != nil {
 		t.Errorf("Error: %s", err)
 	}
 
 	//Did not work :(
-	// oracle := NewECBSuffixOracleWithPrefix(text)
-	// RecoverECBSuffixWithPrefix(oracle)
+	oracle := NewECBSuffixOracleWithPrefix(text)
+	RecoverECBSuffixWithPrefix(oracle)
+}
+
+func TestPaddingValidation(t *testing.T) {
+	assertNil(t, UnpadPKCS7([]byte("ICE ICE BABY\x05\x05\x05\x05")))
+	assertNil(t, UnpadPKCS7([]byte("ICE ICE BABY\x01\x02\x03\x04")))
+	assertNil(t, UnpadPKCS7([]byte("YELLOW SUBMARINE\x00\x10\x10\x10\x10\x10\x10\x10\x10\x10")))
+	assertEqual(t, UnpadPKCS7([]byte("ICE ICE BABY\x04\x04\x04\x04")), []byte("ICE ICE BABY"))
+	assertEqual(t, UnpadPKCS7([]byte("YELLOW SUBMARINE\x04\x04\x04\x04")), []byte("YELLOW SUBMARINE"))
+	assertEqual(t, UnpadPKCS7([]byte("YELLOW SUBMARINE\x09\x09\x09\x09\x09\x09\x09\x09\x09")), []byte("YELLOW SUBMARINE"))
+	assertEqual(t, UnpadPKCS7([]byte("YELLOW SUBMARINE\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10")), []byte("YELLOW SUBMARINE"))
+	assertEqual(t, UnpadPKCS7([]byte("\x04\x04\x04\x04")), []byte(""))
+}
+
+func assertNil(t *testing.T, v []byte) {
+	t.Helper()
+	if v != nil {
+		t.Error("value not nil")
+	}
+}
+
+func assertEqual(t *testing.T, a, b []byte) {
+	t.Helper()
+	if !bytes.Equal(a, b) {
+		t.Error("values not equal")
+	}
 }
