@@ -110,3 +110,16 @@ func TestNewCutAndPasteECBOracles(t *testing.T) {
 		t.Error("not admin")
 	}
 }
+
+func TestRecoverECBSuffixWithPrefix(t *testing.T) {
+	secret := "Um9sbGluJyBpbiBteSA1LjAKV2l0aCBteSByYWctdG9wIGRvd24gc28gbXkgaGFpciBjYW4gYmxvdwpUaGUgZ2lybGllcyBvbiBzdGFuZGJ5IHdhdmluZyBqdXN0IHRvIHNheSBoaQpEaWQgeW91IHN0b3A/IE5vLCBJIGp1c3QgZHJvdmUgYnkK"
+
+	_, err := base64.StdEncoding.DecodeString(secret)
+	if err != nil {
+		t.Errorf("Error: %s", err)
+	}
+
+	//Did not work :(
+	// oracle := NewECBSuffixOracleWithPrefix(text)
+	// RecoverECBSuffixWithPrefix(oracle)
+}

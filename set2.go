@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"net/url"
 	"strings"
+	"time"
 )
 
 // PadPKCS7 pads a byte slice with PKCS#7 padding.
@@ -252,4 +253,79 @@ func MakeAdminCookie(generateCookie func(email string) string) string {
 
 	// email=AAAAAAAAAAAAAAAAAAAA&role=admin&role=user&role=user&uid=51 + padding
 	return block1 + block2 + block3 + block4
+}
+
+func NewECBSuffixOracleWithPrefix(secret []byte) func([]byte) []byte {
+	key := make([]byte, 16)
+	rand.Read(key)
+	cipher, _ := aes.NewCipher(key)
+
+	prefixRNG, _ := rand.Int(rand.Reader, big.NewInt(81))
+	prefix := make([]byte, prefixRNG.Int64())
+
+	return func(in []byte) []byte {
+		time.Sleep(200 * time.Microsecond)
+		rand.Read(prefix)
+		fmt.Println(prefix)
+		fmt.Println(in)
+		fmt.Println(secret)
+		in = append(prefix, in...)
+		in = append(in, secret...)
+		fmt.Println(len(in) + 16 - len(in)%16)
+		in = PadPKCS7(in, len(in)+16-len(in)%16)
+		return EncryptECB(cipher, in)
+	}
+}
+
+// ECBIndex finds the first repeating block
+func ECBIndex(in []byte, bs int) int {
+	if len(in)%bs != 0 {
+		log.Fatal("Wrong sized input")
+	}
+	prev := in[:bs]
+	for i := 1; i < len(in)/bs; i++ {
+		if bytes.Equal(prev, in[i*bs:i*bs+bs]) {
+			return i*bs - bs
+		}
+		prev = in[i*bs : i*bs+bs]
+	}
+	return -1
+}
+
+func RecoverECBSuffixWithPrefix(oracle func([]byte) []byte) []byte {
+	var bs, pl int
+	out := oracle(bytes.Repeat([]byte{42}, 32))
+	for blockSize := 16; blockSize < 512; blockSize += 16 {
+		if len(out)%blockSize != 0 {
+			continue
+		}
+		i := ECBIndex(out, blockSize)
+		fmt.Println("i: ", i)
+		if i < 0 {
+			continue
+		}
+		bs = blockSize
+		fmt.Println("bs: ", bs)
+		for p := 0; p < blockSize; p++ {
+			msg := append(bytes.Repeat([]byte{42}, p+bs*2), 'X')
+			if ECBIndex(oracle(msg), bs) == i {
+				pl = i - p
+				fmt.Println("pl: ", pl)
+				break
+			}
+		}
+		break
+	}
+	if bs == 0 || pl == 0 {
+		log.Fatal("could not determine block or prefix size")
+	}
+	log.Printf("Block size is likely: %d", bs)
+	log.Printf("Prefix length is likely: %d", pl)
+
+	return RecoverECBSuffix(func(in []byte) []byte {
+		p := bs - pl%bs
+		msg := append(bytes.Repeat([]byte{42}, p), in...)
+		out := oracle(msg)
+		return out[pl+p:]
+	})
 }
