@@ -238,7 +238,7 @@ func NewCutAndPasteECBOracles() (
 	return
 }
 
-func MakeAdminCookie(generateCookie func(email string) string) string {
+func MakeECBAdminCookie(generateCookie func(email string) string) string {
 	// These could be obtained with RecoverECBSuffix
 	start, _ := "email=", "&role=user&uid=51"
 
@@ -318,4 +318,53 @@ func RecoverECBSuffixWithPrefix(oracle func([]byte) []byte) []byte {
 		out := oracle(msg)
 		return out[pl+p:]
 	})
+}
+
+func NewCBCOracles() (
+	generateCookie func(email string) string,
+	amIAdmin func(string) bool,
+) {
+	key := make([]byte, 16)
+	rand.Read(key)
+	cipher, _ := aes.NewCipher(key)
+
+	generateCookie = func(email string) string {
+
+		profile := []byte("comment1=cooking%20MCs;userdata=")
+		qEmail := bytes.Replace([]byte(email), []byte("="), []byte("%3D"), -1)
+		qEmail = bytes.Replace(qEmail, []byte(";"), []byte("%3B"), -1)
+		profile = append(profile, qEmail...)
+		profile = append(profile, ";comment2=%20like%20a%20pound%20of%20bacon"...)
+		profile = PadPKCS7(profile, 16)
+
+		iv := make([]byte, 16)
+		rand.Read(iv)
+		cookie := EncryptCBC(cipher, iv, profile)
+		return string(iv) + string(cookie)
+	}
+
+	amIAdmin = func(cookie string) bool {
+		iv := []byte(cookie[:16])
+		msg := []byte(cookie[16:])
+		cookie = string(UnpadPKCS7(DecryptCBC(cipher, iv, msg)))
+		log.Printf("%q", cookie)
+		return strings.Contains(cookie, ";admin=true")
+	}
+	return
+}
+
+func XORString(a, b string) string {
+	return string(XOR([]byte(a), []byte(b)))
+}
+
+func MakeCBCAdminCookie(generateCookie func(email string) string) string {
+	prefix := "comment1=cooking%20MCs;userdata="
+	target := "AA;admin=true;AA"
+	p := strings.Repeat("*", 16*2)
+	out := generateCookie(p)
+	out1 := out[:16+len(prefix)]
+	out2 := out[16+len(prefix) : 16+len(prefix)+16]
+	out3 := out[16+len(prefix)+16:]
+	out2 = XORString(out2, XORString(strings.Repeat("*", 16), target))
+	return out1 + out2 + out3
 }

@@ -106,7 +106,7 @@ func TestNewCutAndPasteECBOracles(t *testing.T) {
 		t.Fatal("this is too easy")
 	}
 
-	if !amIAdmin(MakeAdminCookie(generateCookie)) {
+	if !amIAdmin(MakeECBAdminCookie(generateCookie)) {
 		t.Error("not admin")
 	}
 }
@@ -146,5 +146,15 @@ func assertEqual(t *testing.T, a, b []byte) {
 	t.Helper()
 	if !bytes.Equal(a, b) {
 		t.Error("values not equal")
+	}
+}
+
+func TestNewCBCOracles(t *testing.T) {
+	generateCookie, amIAdmin := NewCBCOracles()
+	if amIAdmin(generateCookie(";admin=true;")) {
+		t.Fatal("this is too easy")
+	}
+	if !amIAdmin(MakeCBCAdminCookie(generateCookie)) {
+		t.Error("not admin")
 	}
 }
