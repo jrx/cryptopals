@@ -200,7 +200,7 @@ func UnpadPKCS7(in []byte) []byte {
 		return in
 	}
 	b := in[len(in)-1]
-	if len(in) < int(b) {
+	if int(b) > len(in) || b == 0 {
 		return nil
 	}
 	for i := 1; i < int(b); i++ {
@@ -320,7 +320,7 @@ func RecoverECBSuffixWithPrefix(oracle func([]byte) []byte) []byte {
 	})
 }
 
-func NewCBCOracles() (
+func NewCBCCookieOracles() (
 	generateCookie func(email string) string,
 	amIAdmin func(string) bool,
 ) {
