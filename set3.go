@@ -3,6 +3,7 @@ package cryptopals
 import (
 	"bytes"
 	"crypto/aes"
+	"crypto/cipher"
 	"crypto/rand"
 )
 
@@ -100,3 +101,27 @@ func AttackCBCPaddingOracle(
 	}
 	return UnpadPKCS7(plaintext)
 }
+
+// EncryptCTR encrypts a byte slice using AES in CTR (Counter) mode.
+func EncryptCTR(src []byte, b cipher.Block, nonce []byte) []byte {
+	input, output := make([]byte, b.BlockSize()), make([]byte, b.BlockSize())
+	copy(input, nonce)
+	var dst []byte
+	for i := 0; i < len(src); i += b.BlockSize() {
+		b.Encrypt(output, input)
+		cipherText := XOR(output, src[i:])
+		dst = append(dst, cipherText...)
+
+		j := len(nonce)
+		for {
+			input[j] += 1
+			if input[j] != 0 {
+				break
+			}
+			j++
+		}
+	}
+	return dst
+}
+
+var decryptCTR = EncryptCTR

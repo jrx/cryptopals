@@ -2,6 +2,7 @@ package cryptopals
 
 import (
 	"bytes"
+	"crypto/aes"
 	"encoding/base64"
 	"testing"
 )
@@ -40,4 +41,21 @@ func TestNewCBCPaddingOracles(t *testing.T) {
 		}
 	}
 
+}
+
+func TestEncryptCTR(t *testing.T) {
+	b64Text := "L77na/nrFsKvynd6HzOoG7GHTLXsTVu9qvY/2syLXzhPweyyMTJULu/6/kXX0KSvoOLSFQ=="
+	nonce := make([]byte, 8)
+	key := []byte("YELLOW SUBMARINE")
+	cipher, err := aes.NewCipher(key)
+	if err != nil {
+		t.Errorf("Error: %s", err)
+	}
+
+	msg := decodeBase64(t, b64Text)
+	res := decryptCTR(msg, cipher, nonce)
+	t.Logf("%q", res)
+	if len(res) != len(msg) {
+		t.Error("Wrong length.")
+	}
 }

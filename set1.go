@@ -23,9 +23,12 @@ func HexToBase64(hs string) (string, error) {
 }
 
 func XOR(h1, h2 []byte) []byte {
-	if len(h1) != len(h2) {
-		log.Fatal("invalid length")
+	if len(h1) > len(h2) {
+		h1 = h1[:len(h2)]
 	}
+	// } else if len(h1) < len(h2) {
+	// 	h2 = h2[:len(h1)]
+	// }
 	res := make([]byte, len(h1))
 	for i := range h1 {
 		res[i] = h1[i] ^ h2[i]
