@@ -33,7 +33,7 @@ func TestFixedXOR(t *testing.T) {
 
 func TestSingleByteXOR(t *testing.T) {
 	expected := "Cooking MC's like a pound of bacon"
-	res, _, _, err := SingleByteXOR("1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736")
+	res, _, _, err := SingleByteXOR("1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736", corpus)
 	if err != nil {
 		t.Errorf("Error: %s", err)
 	}

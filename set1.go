@@ -83,7 +83,7 @@ func ScoreText(text string, corpus map[rune]float64) float64 {
 
 var corpus = CorpusFromFiles("testdata/alice.txt")
 
-func SingleByteXOR(s string) (string, int, float64, error) {
+func SingleByteXOR(s string, corp map[rune]float64) (string, int, float64, error) {
 	// for char, value := range corpus {
 	// 	log.Printf("%c: %.5f", char, value)
 	// }
@@ -103,7 +103,7 @@ func SingleByteXOR(s string) (string, int, float64, error) {
 			decryption[i] = c ^ byte(key)
 		}
 
-		score := ScoreText(string(decryption), corpus)
+		score := ScoreText(string(decryption), corp)
 		// log.Printf("%s: %.5f", string(decryption), score)
 		if score > bestScore {
 			bestKey = key
@@ -188,7 +188,7 @@ func BreakSingleByteXOR(file string) (string, error) {
 	var bestScore float64
 	var res string
 	for _, line := range lines {
-		decryption, _, score, err := SingleByteXOR(line)
+		decryption, _, score, err := SingleByteXOR(line, corpus)
 		if err != nil {
 			return "", err
 		}
@@ -222,7 +222,7 @@ func BreakRepeatingKeyXOR(file string) (string, error) {
 			}
 			column[row] = text[row*keySize+col]
 		}
-		_, k, _, err := SingleByteXOR(hex.EncodeToString(column))
+		_, k, _, err := SingleByteXOR(hex.EncodeToString(column), corpus)
 		if err != nil {
 			log.Fatalf("Error: %s", err)
 		}

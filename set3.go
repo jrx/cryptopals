@@ -5,6 +5,9 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"encoding/hex"
+	"log"
+	"unicode"
 )
 
 func NewCBCPaddingOracles(plaintext []byte) (
@@ -124,4 +127,57 @@ func EncryptCTR(src []byte, b cipher.Block, nonce []byte) []byte {
 	return dst
 }
 
-var decryptCTR = EncryptCTR
+var DecryptCTR = EncryptCTR
+
+func NewFixedNonceCTROracle() (encryptMessage func([]byte) []byte) {
+	key := make([]byte, 16)
+	rand.Read(key)
+	nonce := make([]byte, 8)
+	rand.Read(nonce)
+	cipher, _ := aes.NewCipher(key)
+	return func(msg []byte) []byte {
+		return EncryptCTR(msg, cipher, nonce)
+	}
+}
+
+func FindFixedNonceCTRKeystream(cipherTexts [][]byte) []byte {
+	uppercaseCorpus := make(map[rune]float64)
+	for char, value := range corpus {
+		if !unicode.IsUpper(char) {
+			continue
+		}
+		uppercaseCorpus[unicode.ToUpper(char)] += value
+	}
+
+	column := make([]byte, len(cipherTexts))
+	var maxLen int
+	for _, ct := range cipherTexts {
+		if len(ct) > maxLen {
+			maxLen = len(ct)
+		}
+	}
+
+	keystream := make([]byte, maxLen)
+	for col := 0; col < maxLen; col++ {
+		var colLen int
+		for _, ct := range cipherTexts {
+			if col >= len(ct) {
+				continue
+			}
+			column[colLen] = ct[col]
+			colLen++
+		}
+
+		corp := corpus
+		if col == 0 {
+			corp = uppercaseCorpus
+		}
+
+		_, k, _, err := SingleByteXOR(hex.EncodeToString(column), corp)
+		if err != nil {
+			log.Fatalf("Error: %s", err)
+		}
+		keystream[col] = byte(k)
+	}
+	return keystream
+}

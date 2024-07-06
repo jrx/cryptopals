@@ -4,11 +4,21 @@ import (
 	"bytes"
 	"crypto/aes"
 	"encoding/base64"
+	"os"
+	"strings"
 	"testing"
 )
 
 func decodeBase64(t *testing.T, b64Text string) []byte {
 	text, err := base64.StdEncoding.DecodeString(b64Text)
+	if err != nil {
+		t.Errorf("Error: %s", err)
+	}
+	return text
+}
+
+func readFile(t *testing.T, filename string) []byte {
+	text, err := os.ReadFile(filename)
 	if err != nil {
 		t.Errorf("Error: %s", err)
 	}
@@ -43,7 +53,7 @@ func TestNewCBCPaddingOracles(t *testing.T) {
 
 }
 
-func TestEncryptCTR(t *testing.T) {
+func TestDecryptCTR(t *testing.T) {
 	b64Text := "L77na/nrFsKvynd6HzOoG7GHTLXsTVu9qvY/2syLXzhPweyyMTJULu/6/kXX0KSvoOLSFQ=="
 	nonce := make([]byte, 8)
 	key := []byte("YELLOW SUBMARINE")
@@ -53,9 +63,27 @@ func TestEncryptCTR(t *testing.T) {
 	}
 
 	msg := decodeBase64(t, b64Text)
-	res := decryptCTR(msg, cipher, nonce)
+	res := DecryptCTR(msg, cipher, nonce)
 	t.Logf("%q", res)
 	if len(res) != len(msg) {
 		t.Error("Wrong length.")
+	}
+}
+
+func TestBreakFixedNonceCTR(t *testing.T) {
+	encryptMessage := NewFixedNonceCTROracle()
+	var plainTexts, cipherTexts [][]byte
+
+	b64Text := readFile(t, "testdata/20.txt")
+	for _, line := range strings.Split(string(b64Text), "\n") {
+		pt := decodeBase64(t, line)
+		plainTexts = append(plainTexts, pt)
+		cipherTexts = append(cipherTexts, encryptMessage(pt))
+	}
+
+	keystream := FindFixedNonceCTRKeystream(cipherTexts)
+
+	for i := range plainTexts {
+		t.Logf("%d: %q", i, XOR(keystream, cipherTexts[i]))
 	}
 }
