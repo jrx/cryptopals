@@ -181,3 +181,56 @@ func FindFixedNonceCTRKeystream(cipherTexts [][]byte) []byte {
 	}
 	return keystream
 }
+
+type MT19937 struct {
+	index int
+	mt    [624]uint32
+}
+
+func NewMT19937(seed uint32) *MT19937 {
+	m := &MT19937{index: 624}
+
+	for i := range m.mt {
+		if i == 0 {
+			m.mt[0] = seed
+		} else {
+			m.mt[i] = 1812433253*(m.mt[i-1]^m.mt[i-1]>>30) + uint32(i)
+		}
+	}
+	return m
+}
+
+func (m *MT19937) ExtractNumber() uint32 {
+	if m.index >= 624 {
+		m.Twist()
+	}
+
+	y := m.mt[m.index]
+	// Right shift by 11 bits
+	y ^= y >> 11
+	// Shift y left by 7 and take the bitwise and of 2636928640
+	y ^= y << 7 & 2636928640
+	// Shift y left by 15 and take the bitwise and of y and 4022730752
+	y ^= y << 15 & 4022730752
+	// Right shift by 18 bits
+	y ^= y >> 18
+
+	// log.Printf("got: %d", y)
+
+	m.index++
+	return y
+}
+
+func (m *MT19937) Twist() {
+	for i := range m.mt {
+		// Get the most significant bit and add it to the less significant
+		// bits of the next number
+		y := (m.mt[i] & 0x80000000) + (m.mt[(i+1)%624] & 0x7fffffff)
+		m.mt[i] = m.mt[(i+397)%624] ^ y>>1
+
+		if y%2 != 0 {
+			m.mt[i] ^= 0x9908b0df
+		}
+	}
+	m.index = 0
+}
