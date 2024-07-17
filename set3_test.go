@@ -432,3 +432,11 @@ func TestMT19937(t *testing.T) {
 		}
 	}
 }
+
+func TestRandomNumberFromTimeSeed(t *testing.T) {
+	number, seed := RandomNumberFromTimeSeed()
+	res := RecoverTimeSeed(number)
+	if res != seed {
+		t.Errorf("Time recovered incorrectly %d, but want %d", res, seed)
+	}
+}

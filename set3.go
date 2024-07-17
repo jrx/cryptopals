@@ -7,6 +7,8 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"log"
+	mathrand "math/rand"
+	"time"
 	"unicode"
 )
 
@@ -233,4 +235,27 @@ func (m *MT19937) Twist() {
 		}
 	}
 	m.index = 0
+}
+
+func RandomNumberFromTimeSeed() (uint32, uint32) {
+	time.Sleep(40 * time.Millisecond)
+	time.Sleep(time.Duration(mathrand.Intn(1000)) * time.Millisecond)
+
+	seed := uint32(time.Now().UnixMilli())
+	n := NewMT19937(seed)
+
+	time.Sleep(40 * time.Millisecond)
+	time.Sleep(time.Duration(mathrand.Intn(1000)) * time.Millisecond)
+
+	return n.ExtractNumber(), seed
+}
+
+func RecoverTimeSeed(output uint32) uint32 {
+	seed := uint32(time.Now().UnixMilli())
+	for {
+		if NewMT19937(seed).ExtractNumber() == output {
+			return seed
+		}
+		seed--
+	}
 }
