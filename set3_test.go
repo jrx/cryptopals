@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"crypto/aes"
 	"encoding/base64"
+	mathrand "math/rand"
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func decodeBase64(t *testing.T, b64Text string) []byte {
@@ -438,5 +440,33 @@ func TestRandomNumberFromTimeSeed(t *testing.T) {
 	res := RecoverTimeSeed(number)
 	if res != seed {
 		t.Errorf("Time recovered incorrectly %d, but want %d", res, seed)
+	}
+}
+
+func TestUntemperMT19937(t *testing.T) {
+	for i := 0; i < 100000; i++ {
+		y := mathrand.Uint32()
+		x := y
+
+		y ^= y >> 11
+		y ^= y << 7 & 2636928640
+		y ^= y << 15 & 4022730752
+		y ^= y >> 18
+
+		res := UntemperMT19937(y)
+		if x != res {
+			t.Fatalf("Wrong number at iteration %d, expected %d, got %d", i, x, res)
+		}
+	}
+
+	mt := NewMT19937(uint32(time.Now().UnixMilli()))
+	clone := NewMT19937(0)
+	for i := 0; i < 624; i++ {
+		clone.mt[i] = UntemperMT19937(mt.ExtractNumber())
+	}
+	for i := 0; i < 2000; i++ {
+		if clone.ExtractNumber() != mt.ExtractNumber() {
+			t.Fail()
+		}
 	}
 }

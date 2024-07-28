@@ -259,3 +259,13 @@ func RecoverTimeSeed(output uint32) uint32 {
 		seed--
 	}
 }
+
+func UntemperMT19937(y uint32) uint32 {
+	y ^= y >> 18
+	y ^= y << 15 & 4022730752
+	for i := 0; i < 7; i++ {
+		y ^= y << 7 & 2636928640
+	}
+	y ^= y>>11 ^ y>>(11*2)
+	return y
+}
