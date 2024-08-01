@@ -3,6 +3,7 @@ package cryptopals
 import (
 	"bytes"
 	"crypto/aes"
+	"crypto/rand"
 	"encoding/base64"
 	mathrand "math/rand"
 	"os"
@@ -468,5 +469,21 @@ func TestUntemperMT19937(t *testing.T) {
 		if clone.ExtractNumber() != mt.ExtractNumber() {
 			t.Fail()
 		}
+	}
+}
+
+func TestBreakMT19937(t *testing.T) {
+	knownPlaintext := []byte("AAAAAAAAAAAAAA")
+	ct := OracleMT19937(knownPlaintext)
+	t.Log(RecoverMT19937(ct, knownPlaintext))
+
+	token := MakeRandomTokenWithMT19937()
+	if !DetectMT19937Token(token) {
+		t.Errorf("Failed to detect token.")
+	}
+
+	rand.Read(token)
+	if DetectMT19937Token(token) {
+		t.Errorf("Detected non-MT19937 token")
 	}
 }
