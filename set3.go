@@ -109,6 +109,9 @@ func AttackCBCPaddingOracle(
 
 // EncryptCTR encrypts a byte slice using AES in CTR (Counter) mode.
 func EncryptCTR(src []byte, b cipher.Block, nonce []byte) []byte {
+	if len(nonce) >= b.BlockSize() {
+		panic("nonce should be shorter blocksize")
+	}
 	input, output := make([]byte, b.BlockSize()), make([]byte, b.BlockSize())
 	copy(input, nonce)
 	var dst []byte
