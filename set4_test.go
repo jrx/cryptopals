@@ -27,3 +27,13 @@ func TestBreakAESCTR(t *testing.T) {
 	t.Logf("%s", AttackCTREditOracle(ct, edit))
 
 }
+
+func TestNewCTROracles(t *testing.T) {
+	generateCookie, amIAdmin := NewCTRCookieOracles()
+	if amIAdmin(generateCookie(";admin=true;")) {
+		t.Fatal("this is too easy")
+	}
+	if !amIAdmin(MakeCTRAdminCookie(generateCookie)) {
+		t.Error("not admin")
+	}
+}

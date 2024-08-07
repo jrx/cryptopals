@@ -1,8 +1,11 @@
 package cryptopals
 
 import (
+	"bytes"
 	"crypto/aes"
 	"crypto/rand"
+	"log"
+	"strings"
 )
 
 func NewCTREditOracles(plaintext []byte) (
@@ -44,4 +47,48 @@ func AttackCTREditOracle(ciphertext []byte,
 		plaintext = append(plaintext, p...)
 	}
 	return plaintext
+}
+
+func NewCTRCookieOracles() (
+	generateCookie func(email string) string,
+	amIAdmin func(string) bool,
+) {
+	key := make([]byte, 16)
+	rand.Read(key)
+	cipher, _ := aes.NewCipher(key)
+
+	generateCookie = func(email string) string {
+
+		profile := []byte("comment1=cooking%20MCs;userdata=")
+		qEmail := bytes.Replace([]byte(email), []byte("="), []byte("%3D"), -1)
+		qEmail = bytes.Replace(qEmail, []byte(";"), []byte("%3B"), -1)
+		profile = append(profile, qEmail...)
+		profile = append(profile, ";comment2=%20like%20a%20pound%20of%20bacon"...)
+
+		iv := make([]byte, 8)
+		rand.Read(iv)
+		cookie := EncryptCTR(profile, cipher, iv)
+		return string(iv) + string(cookie)
+	}
+
+	amIAdmin = func(cookie string) bool {
+		iv := []byte(cookie[:8])
+		msg := []byte(cookie[8:])
+		cookie = string(DecryptCTR(msg, cipher, iv))
+		log.Printf("%q", cookie)
+		return strings.Contains(cookie, ";admin=true")
+	}
+	return
+}
+
+func MakeCTRAdminCookie(generateCookie func(email string) string) string {
+	prefix := "comment1=cooking%20MCs;userdata="
+	target := "AA;admin=true;AA"
+	p := strings.Repeat("*", 16)
+	out := generateCookie(p)
+	out1 := out[:8+len(prefix)]
+	out2 := out[8+len(prefix) : 8+len(prefix)+16]
+	out3 := out[8+len(prefix)+16:]
+	out2 = XORString(out2, XORString(strings.Repeat("*", 16), target))
+	return out1 + out2 + out3
 }
