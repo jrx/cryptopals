@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"crypto/aes"
 	"crypto/rand"
+	"fmt"
 	"log"
+	"regexp"
 	"strings"
 )
 
@@ -91,4 +93,49 @@ func MakeCTRAdminCookie(generateCookie func(email string) string) string {
 	out3 := out[8+len(prefix)+16:]
 	out2 = XORString(out2, XORString(strings.Repeat("*", 16), target))
 	return out1 + out2 + out3
+}
+
+func NewCBCKeyEqIVOracles() (
+	encryptMessage func([]byte) []byte,
+	decryptMessage func([]byte) error,
+	isKeyCorrect func([]byte) bool, // for testing
+) {
+	key := make([]byte, 16)
+	rand.Read(key)
+	cipher, _ := aes.NewCipher(key)
+
+	encryptMessage = func(message []byte) []byte {
+		return EncryptCBC(cipher, key, PadPKCS7(message, 16))
+	}
+
+	decryptMessage = func(ciphertext []byte) error {
+		plaintext := UnpadPKCS7(DecryptCBC(cipher, key, ciphertext))
+		// Matches all printable characters
+		if !regexp.MustCompile(`^[ -~]+$`).Match(plaintext) {
+			return fmt.Errorf("invalid message: %s", plaintext)
+		}
+		return nil
+	}
+
+	isKeyCorrect = func(k []byte) bool {
+		return bytes.Equal(k, key)
+	}
+
+	return
+}
+
+func RecoverCBCKeyEqIV(
+	encryptMessage func([]byte) []byte,
+	decryptMessage func([]byte) error,
+) []byte {
+	ciphertext := encryptMessage(bytes.Repeat([]byte("A"), 16*4))
+	copy(ciphertext[16:], make([]byte, 16))
+	copy(ciphertext[32:], ciphertext[:16])
+	err := decryptMessage(ciphertext).Error()
+	plaintext := []byte(strings.TrimPrefix(err, "invalid message: "))
+	if len(plaintext) != 16*4 {
+		println(len(plaintext))
+		panic("unexpected plaintext length")
+	}
+	return XOR(plaintext[:16], plaintext[32:48])
 }

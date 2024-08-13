@@ -37,3 +37,11 @@ func TestNewCTROracles(t *testing.T) {
 		t.Error("not admin")
 	}
 }
+
+func TestNewCBCKeyEqIVOracles(t *testing.T) {
+	encryptMessage, decryptMessage, isKeyCorrect := NewCBCKeyEqIVOracles()
+	key := RecoverCBCKeyEqIV(encryptMessage, decryptMessage)
+	if !isKeyCorrect(key) {
+		t.Error("wrong key")
+	}
+}
