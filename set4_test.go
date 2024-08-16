@@ -1,7 +1,9 @@
 package cryptopals
 
 import (
+	"bytes"
 	"crypto/aes"
+	"crypto/rand"
 	"testing"
 )
 
@@ -43,5 +45,20 @@ func TestNewCBCKeyEqIVOracles(t *testing.T) {
 	key := RecoverCBCKeyEqIV(encryptMessage, decryptMessage)
 	if !isKeyCorrect(key) {
 		t.Error("wrong key")
+	}
+}
+
+func TestSecretPrefixMAC(t *testing.T) {
+	key := make([]byte, 16)
+	rand.Read(key)
+
+	msg := bytes.Repeat([]byte("hey"), 20)
+	mac := SecretPrefixMAC(key, msg)
+	if !CheckSecretPrefixMAC(key, msg, mac) {
+		t.Fatal("MAC does not validate.")
+	}
+	msg[20] = 'a'
+	if CheckSecretPrefixMAC(key, msg, mac) {
+		t.Error("MAC does not invalidate.")
 	}
 }
