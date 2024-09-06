@@ -436,3 +436,79 @@ func CheckSecretPrefixMAC(key, message, mac []byte) bool {
 	sha1 := s.checkSum()
 	return bytes.Equal(mac, sha1[:])
 }
+
+func MDPadding(len uint64) []byte {
+	buf := &bytes.Buffer{}
+
+	// Padding.  Add a 1 bit and 0 bits until 56 bytes mod 64.
+	var tmp [64 + 8]byte // padding + length buffer
+	tmp[0] = 0x80
+	var t uint64
+	if len%64 < 56 {
+		t = 56 - len%64
+	} else {
+		t = 64 + 56 - len%64
+	}
+
+	// Length in bits.
+	len <<= 3
+	padlen := tmp[:t+8]
+	BePutUint64(padlen[t:], len)
+	buf.Write(padlen)
+
+	return buf.Bytes()
+}
+
+func NewSecretPrefixMACOracle() (
+	cookie []byte,
+	amIAdmin func(cookie []byte) bool,
+) {
+	key := make([]byte, 16)
+	rand.Read(key)
+
+	cookieData := []byte("comment1=cooking%20MCs;userdata=foo;comment2=%20like%20a%20pound%20of%20bacon")
+
+	cookie = append(cookie, SecretPrefixMAC(key, cookieData)...)
+	cookie = append(cookie, cookieData...)
+
+	amIAdmin = func(cookie []byte) bool {
+		mac := cookie[:20]
+		msg := cookie[20:]
+		if !CheckSecretPrefixMAC(key, msg, mac) {
+			return false
+		}
+		return bytes.Contains(msg, []byte(";admin=true;")) || strings.HasSuffix(string(msg), ";admin=true")
+	}
+	return
+}
+
+func ExtendSHA1(mac, msg, extension []byte) (newMAC, newMSG []byte) {
+
+	newMSG = append(newMSG, msg...)
+	newMSG = append(newMSG, MDPadding(uint64(len(msg)+16))...)
+
+	s := &SHA1{}
+	s.h[0] = BeUint32(mac[0:4])
+	s.h[1] = BeUint32(mac[4:8])
+	s.h[2] = BeUint32(mac[8:12])
+	s.h[3] = BeUint32(mac[12:16])
+	s.h[4] = BeUint32(mac[16:20])
+
+	s.len = uint64(len(newMSG) + 16)
+
+	// Append the extension
+	s.Write(extension)
+	newMSG = append(newMSG, extension...)
+
+	// Calculate the new MAC
+	sha1 := s.checkSum()
+	return sha1[:], newMSG
+}
+
+func MakeSHA1AdminCookie(cookie []byte) []byte {
+	mac := cookie[:20]
+	msg := cookie[20:]
+
+	newMAC, newMSG := ExtendSHA1(mac, msg, []byte(";admin=true"))
+	return append(newMAC, newMSG...)
+}

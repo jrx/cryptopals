@@ -62,3 +62,31 @@ func TestSecretPrefixMAC(t *testing.T) {
 		t.Error("MAC does not invalidate.")
 	}
 }
+
+func TestGluePadding(t *testing.T) {
+	msg := bytes.Repeat([]byte("hey"), 20)
+
+	s1 := NewSHA1()
+	s1.Write(msg)
+	s1.checkSum()
+
+	s2 := NewSHA1()
+	s2.Write(msg)
+	s2.Write(MDPadding(uint64(len(msg))))
+
+	if s2.nx != 0 {
+		t.Error("Data still buffered.")
+	}
+	if s2.h != s1.h {
+		t.Error("Wrong hash values.")
+	}
+
+	cookie, amIAdmin := NewSecretPrefixMACOracle()
+	if amIAdmin(append(cookie, []byte(";admin=true")...)) {
+		t.Error("This is too easy.")
+	}
+
+	if !amIAdmin(MakeSHA1AdminCookie(cookie)) {
+		t.Error("not admin")
+	}
+}
