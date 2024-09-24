@@ -90,3 +90,31 @@ func TestGluePadding(t *testing.T) {
 		t.Error("not admin")
 	}
 }
+
+func TestBreakMD4(t *testing.T) {
+	msg := bytes.Repeat([]byte("hey"), 20)
+
+	s1 := NewMD4()
+	s1.Write(msg)
+	s1.checkSum()
+
+	s2 := NewMD4()
+	s2.Write(msg)
+	s2.Write(MD4Padding(uint64(len(msg))))
+
+	if s2.nx != 0 {
+		t.Error("Data still buffered.")
+	}
+	if s2.s != s1.s {
+		t.Error("Wrong s values.")
+	}
+
+	cookie, amIAdmin := NewSecretPrefixMD4Oracle()
+	if amIAdmin(append(cookie, []byte(";admin=true")...)) {
+		t.Error("This is too easy.")
+	}
+
+	if !amIAdmin(MakeMD4AdminCookie(cookie)) {
+		t.Error("not admin")
+	}
+}

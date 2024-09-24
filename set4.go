@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/aes"
 	"crypto/rand"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"log"
@@ -276,15 +277,15 @@ func (d *SHA1) checkSum() [20]byte {
 		panic("d.nx != 0")
 	}
 
-	var digest [20]byte
+	var MD4 [20]byte
 
-	BePutUint32(digest[0:], d.h[0])
-	BePutUint32(digest[4:], d.h[1])
-	BePutUint32(digest[8:], d.h[2])
-	BePutUint32(digest[12:], d.h[3])
-	BePutUint32(digest[16:], d.h[4])
+	BePutUint32(MD4[0:], d.h[0])
+	BePutUint32(MD4[4:], d.h[1])
+	BePutUint32(MD4[8:], d.h[2])
+	BePutUint32(MD4[12:], d.h[3])
+	BePutUint32(MD4[16:], d.h[4])
 
-	return digest
+	return MD4
 }
 
 // decoding and encoding little and big endian integer types from/to byte slices
@@ -510,5 +511,265 @@ func MakeSHA1AdminCookie(cookie []byte) []byte {
 	msg := cookie[20:]
 
 	newMAC, newMSG := ExtendSHA1(mac, msg, []byte(";admin=true"))
+	return append(newMAC, newMSG...)
+}
+
+// **** MD4 ****
+
+const (
+	_Chunk = 64
+	_Init0 = 0x67452301
+	_Init1 = 0xEFCDAB89
+	_Init2 = 0x98BADCFE
+	_Init3 = 0x10325476
+)
+
+// MD4 represents the partial evaluation of a checksum.
+type MD4 struct {
+	s   [4]uint32
+	x   [_Chunk]byte
+	nx  int
+	len uint64
+}
+
+func (d *MD4) Reset() {
+	d.s[0] = _Init0
+	d.s[1] = _Init1
+	d.s[2] = _Init2
+	d.s[3] = _Init3
+	d.nx = 0
+	d.len = 0
+}
+
+// New returns a new hash.Hash computing the MD4 checksum.
+func NewMD4() *MD4 {
+	d := new(MD4)
+	d.Reset()
+	return d
+}
+
+// func (d *MD4) Size() int { return Size }
+
+// func (d *MD4) BlockSize() int { return BlockSize }
+
+func (d *MD4) Write(p []byte) (nn int, err error) {
+	nn = len(p)
+	d.len += uint64(nn)
+	if d.nx > 0 {
+		n := len(p)
+		if n > _Chunk-d.nx {
+			n = _Chunk - d.nx
+		}
+		for i := 0; i < n; i++ {
+			d.x[d.nx+i] = p[i]
+		}
+		d.nx += n
+		if d.nx == _Chunk {
+			MD4Block(d, d.x[0:])
+			d.nx = 0
+		}
+		p = p[n:]
+	}
+	n := MD4Block(d, p)
+	p = p[n:]
+	if len(p) > 0 {
+		d.nx = copy(d.x[:], p)
+	}
+	return
+}
+
+func (d *MD4) checkSum() []byte {
+	// Padding.  Add a 1 bit and 0 bits until 56 bytes mod 64.
+	len := d.len
+	var tmp [64]byte
+	tmp[0] = 0x80
+	if len%64 < 56 {
+		d.Write(tmp[0 : 56-len%64])
+	} else {
+		d.Write(tmp[0 : 64+56-len%64])
+	}
+
+	// Length in bits.
+	len <<= 3
+	for i := uint(0); i < 8; i++ {
+		tmp[i] = byte(len >> (8 * i))
+	}
+	d.Write(tmp[0:8])
+
+	if d.nx != 0 {
+		panic("d.nx != 0")
+	}
+
+	var in []byte
+
+	for _, s := range d.s {
+		in = append(in, byte(s>>0))
+		in = append(in, byte(s>>8))
+		in = append(in, byte(s>>16))
+		in = append(in, byte(s>>24))
+	}
+	return in
+}
+
+var shift1 = []int{3, 7, 11, 19}
+var shift2 = []int{3, 5, 9, 13}
+var shift3 = []int{3, 9, 11, 15}
+
+var xIndex2 = []uint{0, 4, 8, 12, 1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15}
+var xIndex3 = []uint{0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15}
+
+func MD4Block(dig *MD4, p []byte) int {
+	a := dig.s[0]
+	b := dig.s[1]
+	c := dig.s[2]
+	d := dig.s[3]
+	n := 0
+	var X [16]uint32
+	for len(p) >= _Chunk {
+		aa, bb, cc, dd := a, b, c, d
+
+		j := 0
+		for i := 0; i < 16; i++ {
+			X[i] = uint32(p[j]) | uint32(p[j+1])<<8 | uint32(p[j+2])<<16 | uint32(p[j+3])<<24
+			j += 4
+		}
+
+		// Round 1.
+		for i := uint(0); i < 16; i++ {
+			x := i
+			s := shift1[i%4]
+			f := ((c ^ d) & b) ^ d
+			a += f + X[x]
+			a = bits.RotateLeft32(a, s)
+			a, b, c, d = d, a, b, c
+		}
+
+		// Round 2.
+		for i := uint(0); i < 16; i++ {
+			x := xIndex2[i]
+			s := shift2[i%4]
+			g := (b & c) | (b & d) | (c & d)
+			a += g + X[x] + 0x5a827999
+			a = bits.RotateLeft32(a, s)
+			a, b, c, d = d, a, b, c
+		}
+
+		// Round 3.
+		for i := uint(0); i < 16; i++ {
+			x := xIndex3[i]
+			s := shift3[i%4]
+			h := b ^ c ^ d
+			a += h + X[x] + 0x6ed9eba1
+			a = bits.RotateLeft32(a, s)
+			a, b, c, d = d, a, b, c
+		}
+
+		a += aa
+		b += bb
+		c += cc
+		d += dd
+
+		p = p[_Chunk:]
+		n += _Chunk
+	}
+
+	dig.s[0] = a
+	dig.s[1] = b
+	dig.s[2] = c
+	dig.s[3] = d
+	return n
+}
+
+// **** MD4 ****
+
+// SecretPrefixMAC message authentication code (MAC)
+// user for for authenticating and integrity-checking a message
+func SecretPrefixMD4(key, message []byte) []byte {
+	s := NewMD4()
+	s.Write(key)
+	s.Write(message)
+	md4 := s.checkSum()
+	return md4[:]
+}
+
+func CheckSecretPrefixMD4(key, message, mac []byte) bool {
+	s := NewMD4()
+	s.Write(key)
+	s.Write(message)
+	md4 := s.checkSum()
+	return bytes.Equal(mac, md4[:])
+}
+
+func NewSecretPrefixMD4Oracle() (
+	cookie []byte,
+	amIAdmin func(cookie []byte) bool,
+) {
+	key := make([]byte, 16)
+	rand.Read(key)
+
+	cookieData := []byte("comment1=cooking%20MCs;userdata=foo;comment2=%20like%20a%20pound%20of%20bacon")
+
+	cookie = append(cookie, SecretPrefixMD4(key, cookieData)...)
+	cookie = append(cookie, cookieData...)
+
+	amIAdmin = func(cookie []byte) bool {
+		mac := cookie[:16]
+		msg := cookie[16:]
+		if !CheckSecretPrefixMD4(key, msg, mac) {
+			return false
+		}
+		return bytes.Contains(msg, []byte(";admin=true;")) || strings.HasSuffix(string(msg), ";admin=true")
+	}
+	return
+}
+
+func MD4Padding(len uint64) []byte {
+	buf := &bytes.Buffer{}
+
+	var tmp [64]byte
+	tmp[0] = 0x80
+	if len%64 < 56 {
+		buf.Write(tmp[0 : 56-len%64])
+	} else {
+		buf.Write(tmp[0 : 64+56-len%64])
+	}
+
+	// Length in bits.
+	len <<= 3
+	for i := uint(0); i < 8; i++ {
+		tmp[i] = byte(len >> (8 * i))
+	}
+	buf.Write(tmp[0:8])
+
+	return buf.Bytes()
+}
+
+func ExtendMD4(mac, msg, extension []byte) (newMAC, newMSG []byte) {
+
+	newMSG = append(newMSG, msg...)
+	newMSG = append(newMSG, MD4Padding(uint64(len(msg)+16))...)
+
+	s := &MD4{}
+	s.s[0] = binary.LittleEndian.Uint32(mac[0:])
+	s.s[1] = binary.LittleEndian.Uint32(mac[4:])
+	s.s[2] = binary.LittleEndian.Uint32(mac[8:])
+	s.s[3] = binary.LittleEndian.Uint32(mac[12:])
+
+	s.len = uint64(len(newMSG) + 16)
+
+	// Append the extension
+	s.Write(extension)
+	newMSG = append(newMSG, extension...)
+
+	// Calculate the new MAC
+	md4 := s.checkSum()
+	return md4[:], newMSG
+}
+
+func MakeMD4AdminCookie(cookie []byte) []byte {
+	mac := cookie[:16]
+	msg := cookie[16:]
+
+	newMAC, newMSG := ExtendMD4(mac, msg, []byte(";admin=true"))
 	return append(newMAC, newMSG...)
 }
