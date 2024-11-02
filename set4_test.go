@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/aes"
 	"crypto/rand"
+	"crypto/sha1"
 	"testing"
 )
 
@@ -116,5 +117,17 @@ func TestBreakMD4(t *testing.T) {
 
 	if !amIAdmin(MakeMD4AdminCookie(cookie)) {
 		t.Error("not admin")
+	}
+}
+
+func TestBreakHMACSHA1TimingLeak(t *testing.T) {
+	check := newHMACOracle()
+	msg := []byte("I AM ROOT")
+	if check(msg, make([]byte, sha1.Size)) {
+		t.Fatal("too easy")
+	}
+	sig := RecoverSignatureFromTiming(msg, check)
+	if !check(msg, sig) {
+		t.Error("too easy")
 	}
 }

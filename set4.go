@@ -3,7 +3,9 @@ package cryptopals
 import (
 	"bytes"
 	"crypto/aes"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha1"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -11,6 +13,7 @@ import (
 	"math/bits"
 	"regexp"
 	"strings"
+	"time"
 )
 
 func NewCTREditOracles(plaintext []byte) (
@@ -772,4 +775,60 @@ func MakeMD4AdminCookie(cookie []byte) []byte {
 
 	newMAC, newMSG := ExtendMD4(mac, msg, []byte(";admin=true"))
 	return append(newMAC, newMSG...)
+}
+
+func equal(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		time.Sleep(50 * time.Millisecond)
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func newHMACOracle() func(message, signature []byte) bool {
+	key := make([]byte, 16)
+	rand.Read(key)
+
+	return func(message, signature []byte) bool {
+		h := hmac.New(sha1.New, key)
+		h.Write(message)
+
+		expected := h.Sum(nil)
+
+		return equal(signature, expected)
+	}
+}
+
+func RecoverSignatureFromTiming(message []byte,
+	check func(message, signature []byte) bool) []byte {
+	timeIt := func(signature []byte) time.Duration {
+		start := time.Now()
+		check(message, signature)
+		return time.Since(start)
+	}
+	signature := make([]byte, sha1.Size)
+
+	for pos := range signature {
+		baseline := timeIt(signature)
+		var found bool
+		for k := 0; k < 256; k++ {
+			signature[pos] = byte(k)
+			fmt.Printf("\r%x", signature)
+			if timeIt(signature)-baseline > 25*time.Millisecond {
+				found = true
+				break
+			}
+		}
+		if !found {
+			// Maybe if was 0 to begin with.
+			signature[pos] = 0
+		}
+	}
+	fmt.Printf("\n")
+	return signature
 }
