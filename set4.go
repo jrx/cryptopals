@@ -777,12 +777,12 @@ func MakeMD4AdminCookie(cookie []byte) []byte {
 	return append(newMAC, newMSG...)
 }
 
-func equal(a, b []byte) bool {
+func equal(a, b []byte, pause time.Duration) bool {
 	if len(a) != len(b) {
 		return false
 	}
 	for i := range a {
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(pause)
 		if a[i] != b[i] {
 			return false
 		}
@@ -790,42 +790,64 @@ func equal(a, b []byte) bool {
 	return true
 }
 
-func newHMACOracle() func(message, signature []byte) bool {
+var signatureLen = 6
+
+func NewHMACOracle(pause time.Duration) func(message, signature []byte) bool {
 	key := make([]byte, 16)
 	rand.Read(key)
+	debug := true
 
 	return func(message, signature []byte) bool {
 		h := hmac.New(sha1.New, key)
 		h.Write(message)
-
 		expected := h.Sum(nil)
+		if debug {
+			fmt.Printf("%x\n", expected[:signatureLen])
+			debug = false
+		}
 
-		return equal(signature, expected)
+		return equal(signature, expected[:signatureLen], pause)
 	}
 }
 
-func RecoverSignatureFromTiming(message []byte,
+func RecoverSignatureFromAverageTiming(message []byte,
 	check func(message, signature []byte) bool) []byte {
 	timeIt := func(signature []byte) time.Duration {
 		start := time.Now()
 		check(message, signature)
 		return time.Since(start)
 	}
-	signature := make([]byte, sha1.Size)
-
+	delta := 4 * time.Millisecond
+	averageTime := func(signature []byte) time.Duration {
+		var total time.Duration
+		var maxTime time.Duration
+		for i := 0; i < 32; i++ {
+			t := timeIt(signature)
+			total += t
+			if t > maxTime {
+				maxTime = t
+			}
+		}
+		avg := total / 32
+		// if maxTime-avg > delta {
+		// 	panic("too much variance")
+		// }
+		return avg
+	}
+	signature := make([]byte, signatureLen)
 	for pos := range signature {
-		baseline := timeIt(signature)
+		baseline := averageTime(signature)
 		var found bool
 		for k := 0; k < 256; k++ {
 			signature[pos] = byte(k)
 			fmt.Printf("\r%x", signature)
-			if timeIt(signature)-baseline > 25*time.Millisecond {
+			if averageTime(signature)-baseline > delta {
 				found = true
 				break
 			}
 		}
 		if !found {
-			// Maybe if was 0 to begin with.
+			// Maybe it was 0 to begin with.
 			signature[pos] = 0
 		}
 	}

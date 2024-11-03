@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"crypto/aes"
 	"crypto/rand"
-	"crypto/sha1"
 	"testing"
+	"time"
 )
 
 func TestBreakAESCTR(t *testing.T) {
@@ -121,13 +121,13 @@ func TestBreakMD4(t *testing.T) {
 }
 
 func TestBreakHMACSHA1TimingLeak(t *testing.T) {
-	check := newHMACOracle()
+	check := NewHMACOracle(5 * time.Millisecond)
 	msg := []byte("I AM ROOT")
-	if check(msg, make([]byte, sha1.Size)) {
+	if check(msg, make([]byte, signatureLen)) {
 		t.Fatal("too easy")
 	}
-	sig := RecoverSignatureFromTiming(msg, check)
+	sig := RecoverSignatureFromAverageTiming(msg, check)
 	if !check(msg, sig) {
-		t.Error("too easy")
+		t.Error("wrong signature")
 	}
 }
